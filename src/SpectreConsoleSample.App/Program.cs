@@ -3,8 +3,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
+using SixLabors.ImageSharp.Formats.Gif;
+using SixLabors.ImageSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using System.IO;
+using System.Threading;
 
 var app = new CommandApp();
 app.Configure(config =>
@@ -115,9 +119,8 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
             AnsiConsole.Render(
                 new BarChart()
                     .Label("Migration results")
-                    .AddItem("Succeeded", migrationResults.successes, Color.Green)
-                    .AddItem("Failed", migrationResults.failures, Color.Red)
-            );
+                    .AddItem("Succeeded", migrationResults.successes, Spectre.Console.Color.Green)
+                    .AddItem("Failed", migrationResults.failures, Spectre.Console.Color.Red));
         }
         finally
         {
@@ -177,16 +180,49 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
     }
 }
 
-public class RollbackCommand : AsyncCommand<RollbackCommand.Settings>
+public class RollbackCommand : AsyncCommand
 {
-    public class Settings : CommandSettings
+    public override async Task<int> ExecuteAsync(CommandContext context)
     {
-        // TODO: implement rollback settings, not needed for sample
-    }
+        // as seen on:
+        // - https://twitter.com/buhakmeh/status/1417523837076447241
+        // - https://github.com/khalidabuhakmeh/AnimatedGifConsole/
 
-    public override Task<int> ExecuteAsync(CommandContext context, Settings settings)
-    {
-        throw new NotImplementedException("Implementing migrate is good enough for a sample 🙂");
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, _) => cts.Cancel();
+
+        await AnsiConsole
+            .Live(Text.Empty)
+            .StartAsync(async ctx =>
+            {
+                using var gif = await Image.LoadAsync("rollback.gif", new GifDecoder());
+                var metadata = gif.Frames.RootFrame.Metadata.GetGifMetadata();
+
+                while (!cts.IsCancellationRequested)
+                {
+                    try
+                    {
+                        for (var i = 0; i < gif.Frames.Count; ++i)
+                        {
+                            await using var memoryStream = new MemoryStream();
+                            var frame = gif.Frames.CloneFrame(i);
+                            await frame.SaveAsBmpAsync(memoryStream, cts.Token);
+                            memoryStream.Position = 0;
+                            var canvasImage = new CanvasImage(memoryStream).MaxWidth(32);
+                            ctx.UpdateTarget(canvasImage);
+
+                            var delay = TimeSpan.FromMilliseconds(Math.Max(75, metadata.FrameDelay));
+                            await Task.Delay(delay, cts.Token);
+                        }
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // expected, let it continue and terminate naturally
+                    }
+                }
+            });
+
+        return 0;
     }
 }
 
