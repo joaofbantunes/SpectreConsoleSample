@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
 using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using System.IO;
-using System.Threading;
+using Color = Spectre.Console.Color;
 
 var app = new CommandApp();
 app.Configure(config =>
@@ -17,13 +13,6 @@ app.Configure(config =>
     config.AddCommand<RollbackCommand>("rollback");
 });
 return await app.RunAsync(args);
-
-public enum Environment
-{
-    Development,
-    Staging,
-    Production
-}
 
 public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 {
@@ -44,6 +33,11 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
+        AnsiConsole.Render(
+            new FigletText("Migration Tool")
+                .LeftAligned()
+                .Color(Color.Teal));
+
         var username = AskUsernameIfMissing(settings.Username);
         var password = AskPasswordIfMissing(settings.Password);
         var environment = AskEnvironmentIfMissing(settings.Environment);
@@ -54,11 +48,12 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 .AddColumn(new TableColumn("Value").Centered())
                 .AddRow("Username", username)
                 .AddRow("Password", "REDACTED")
-                .AddRow(new Text("Environment"), new Markup($"[{GetEnvironmentColor(environment)}]{environment}[/]"))
-        );
+                .AddRow(
+                    new Text("Environment"),
+                    new Markup($"[{GetEnvironmentColor(environment)}]{environment}[/]")));
 
         var proceedWithSettings = AnsiConsole.Prompt(
-            new SelectionPrompt<bool> {Converter = value => value ? "Yes" : "No"}
+            new SelectionPrompt<bool> { Converter = value => value ? "Yes" : "No" }
                 .Title("Proceed with the aforementioned settings?")
                 .AddChoices(true, false)
         );
@@ -72,8 +67,11 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 
         try
         {
-            await AnsiConsole.Status()
-                .StartAsync("Connecting...", _ => migrator.ConnectAsync(username, password, environment));
+            await AnsiConsole
+                .Status()
+                .StartAsync(
+                    "Connecting...",
+                    _ => migrator.ConnectAsync(username, password, environment));
 
             var migrationInformation = await AnsiConsole
                 .Status()
@@ -83,8 +81,8 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 
             var proceedWithMigration = AnsiConsole
                 .Prompt(
-                    new SelectionPrompt<bool> {Converter = value => value ? "Yes" : "No"}
-                        .Title($"Found {migrationInformation.ThingsToMigrate} things to migrate. Proceed?")
+                    new SelectionPrompt<bool> { Converter = value => value ? "Yes" : "No" }
+                        .Title($"Found {migrationInformation.NumberOfThingsToMigrate} things to migrate. Proceed?")
                         .AddChoices(true, false));
 
             if (!proceedWithMigration)
@@ -92,41 +90,49 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 return 0;
             }
 
-            var migrationResults = await AnsiConsole.Progress().StartAsync(async ctx =>
-            {
-                var migrationTask = ctx.AddTask("Migrating...", maxValue: migrationInformation.ThingsToMigrate);
-
-                var successes = 0;
-                var failures = 0;
-
-                await foreach (var migration in migrator.MigrateAsync())
+            var migrationResults = await AnsiConsole
+                .Progress()
+                .StartAsync(async ctx =>
                 {
-                    if (migration.IsMigrationSuccessful)
+                    var migrationTask = ctx.AddTask(
+                        "Migrating...",
+                        maxValue: migrationInformation.NumberOfThingsToMigrate);
+
+                    var successes = 0;
+                    var failures = 0;
+
+                    await foreach (var migrationResult in migrator.MigrateAsync())
                     {
-                        ++successes;
-                    }
-                    else
-                    {
-                        ++failures;
+                        switch (migrationResult)
+                        {
+                            case MigrationResult.Success:
+                                ++successes;
+                                break;
+                            case MigrationResult.Fail fail:
+                                ++failures;
+                                // TODO: use error information for something
+                                break;
+                        }
+
+                        migrationTask.Increment(1);
                     }
 
-                    migrationTask.Increment(1);
-                }
-
-                return (successes, failures);
-            });
+                    return (successes, failures);
+                });
 
             AnsiConsole.Render(
                 new BarChart()
                     .Label("Migration results")
-                    .AddItem("Succeeded", migrationResults.successes, Spectre.Console.Color.Green)
-                    .AddItem("Failed", migrationResults.failures, Spectre.Console.Color.Red));
+                    .AddItem("Succeeded", migrationResults.successes, Color.Green)
+                    .AddItem("Failed", migrationResults.failures, Color.Red));
         }
         finally
         {
             await AnsiConsole
                 .Status()
-                .StartAsync("Disconnecting...", _ => migrator.DisposeAsync().AsTask());
+                .StartAsync(
+                    "Disconnecting...",
+                    async _ => await migrator.DisposeAsync());
         }
 
         return 0;
@@ -166,8 +172,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                     .AddChoices(
                         Environment.Development,
                         Environment.Staging,
-                        Environment.Production)
-            );
+                        Environment.Production));
 
         static string GetEnvironmentColor(Environment environment)
             => environment switch
@@ -226,13 +231,40 @@ public class RollbackCommand : AsyncCommand
     }
 }
 
-public record MigrationInformation(int ThingsToMigrate);
+public enum Environment
+{
+    Development,
+    Staging,
+    Production
+}
 
-public record MigrationResult(int ThingsId, bool IsMigrationSuccessful);
+public record MigrationInformation(int NumberOfThingsToMigrate);
+
+public abstract record MigrationResult
+{
+    private MigrationResult(int thingId) => ThingId = thingId;
+
+    public int ThingId { get; }
+
+    public sealed record Success : MigrationResult
+    {
+        public Success(int thingId) : base(thingId)
+        {
+        }
+    }
+
+    public sealed record Fail : MigrationResult
+    {
+        public Fail(int thingId, string reason) : base(thingId)
+            => Reason = reason;
+
+        public string Reason { get; }
+    }
+}
 
 public class SampleMigrator : IAsyncDisposable
 {
-    private const int ThingsToMigrate = 150;
+    private const int NumberOfThingsToMigrate = 150;
 
     public Task ConnectAsync(string username, string password, Environment environment)
         => Task.Delay(TimeSpan.FromSeconds(1));
@@ -240,17 +272,22 @@ public class SampleMigrator : IAsyncDisposable
     public async Task<MigrationInformation> GatherMigrationInformationAsync()
     {
         await Task.Delay(TimeSpan.FromSeconds(2.5));
-        return new MigrationInformation(ThingsToMigrate);
+        return new MigrationInformation(NumberOfThingsToMigrate);
     }
 
     public async IAsyncEnumerable<MigrationResult> MigrateAsync()
     {
         var random = new Random();
 
-        for (var i = 0; i < ThingsToMigrate; ++i)
+        for (var i = 0; i < NumberOfThingsToMigrate; ++i)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
-            yield return new MigrationResult(i, (i + random.Next(0, 99)) % 5 != 0);
+            await Task.Delay(TimeSpan.FromMilliseconds(1));
+
+            MigrationResult result = (i + random.Next(0, 99)) % 5 != 0
+                ? new MigrationResult.Success(i)
+                : new MigrationResult.Fail(i, "Random failure");
+
+            yield return result;
         }
     }
 
