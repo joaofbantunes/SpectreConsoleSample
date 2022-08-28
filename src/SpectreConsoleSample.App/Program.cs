@@ -33,7 +33,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.Render(
+        AnsiConsole.Write(
             new FigletText("Migration Tool")
                 .LeftAligned()
                 .Color(Color.Teal));
@@ -42,7 +42,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
         var password = AskPasswordIfMissing(settings.Password);
         var environment = AskEnvironmentIfMissing(settings.Environment);
 
-        AnsiConsole.Render(
+        AnsiConsole.Write(
             new Table()
                 .AddColumn(new TableColumn("Setting").Centered())
                 .AddColumn(new TableColumn("Value").Centered())
@@ -120,7 +120,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                     return (successes, failures);
                 });
 
-            AnsiConsole.Render(
+            AnsiConsole.Write(
                 new BarChart()
                     .Label("Migration results")
                     .AddItem("Succeeded", migrationResults.successes, Color.Green)
@@ -196,10 +196,21 @@ public class RollbackCommand : AsyncCommand
         var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, _) => cts.Cancel();
 
+        var table = new Table()
+            .Centered()
+            .HideHeaders()
+            .NoBorder()
+            .AddColumn(new TableColumn(Text.Empty))
+            .AddEmptyRow() // gif row
+            .AddEmptyRow() // space row
+            .AddEmptyRow(); // lyrics row
+
         await AnsiConsole
-            .Live(Text.Empty)
+            .Live(table)
             .StartAsync(async ctx =>
             {
+                var lyrics = new Lyrics();
+
                 using var gif = await Image.LoadAsync("rollback.gif", new GifDecoder());
                 var metadata = gif.Frames.RootFrame.Metadata.GetGifMetadata();
 
@@ -214,9 +225,12 @@ public class RollbackCommand : AsyncCommand
                             await frame.SaveAsBmpAsync(memoryStream, cts.Token);
                             memoryStream.Position = 0;
                             var canvasImage = new CanvasImage(memoryStream).MaxWidth(32);
-                            ctx.UpdateTarget(canvasImage);
+                            table.UpdateCell(0, 0, canvasImage);
+                            table.UpdateCell(2, 0, lyrics.GetVerse().Centered());
+                            ctx.Refresh();
 
                             var delay = TimeSpan.FromMilliseconds(Math.Max(75, metadata.FrameDelay));
+                            lyrics.Seek(delay);
                             await Task.Delay(delay, cts.Token);
                         }
                     }
@@ -294,3 +308,43 @@ public class SampleMigrator : IAsyncDisposable
     public ValueTask DisposeAsync()
         => new(Task.Delay(TimeSpan.FromSeconds(1)));
 }
+
+#region surprise
+
+public class Lyrics
+{
+    private static readonly TimeSpan ElapsedThreshold = TimeSpan.FromSeconds(8);
+    private TimeSpan _elapsed = TimeSpan.Zero;
+
+    public void Seek(TimeSpan duration)
+    {
+        var newElapsed = _elapsed + duration;
+        _elapsed = newElapsed > ElapsedThreshold ? TimeSpan.Zero : newElapsed;
+    }
+
+    public Text GetVerse()
+        => _elapsed switch
+        {
+            { TotalSeconds: < 1 } => new Text(
+                "Never gonna give you up",
+                new Style(foreground: Color.White, background: Color.RoyalBlue1)),
+            { TotalSeconds: >= 1 and < 2 } => new Text(
+                "Never gonna let you down",
+                new Style(foreground: Color.White, background: Color.DarkRed)),
+            { TotalSeconds: >= 2 and < 3.5 } => new Text(
+                "Never gonna run around and desert you",
+                new Style(foreground: Color.White, background: Color.Chartreuse4)),
+            { TotalSeconds: >= 4 and < 5 } => new Text(
+                "Never gonna make you cry",
+                new Style(foreground: Color.White, background: Color.Orange4_1)),
+            { TotalSeconds: >= 5 and < 6 } => new Text(
+                "Never gonna say goodbye",
+                new Style(foreground: Color.White, background: Color.DeepSkyBlue4_1)),
+            { TotalSeconds: >= 6 and < 7.5 } => new Text(
+                "Never gonna tell a lie and hurt you",
+                new Style(foreground: Color.White, background: Color.DeepPink4_2)),
+            _ => new Text("")
+        };
+}
+
+#endregion surprise
