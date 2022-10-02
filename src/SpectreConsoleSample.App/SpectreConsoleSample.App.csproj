@@ -8,9 +8,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Spectre.Console" Version="0.44.1-preview.0.34" />
-        <PackageReference Include="Spectre.Console.Cli" Version="0.44.1-preview.0.34" />
-        <PackageReference Include="Spectre.Console.ImageSharp" Version="0.44.1-preview.0.34" />
+        <PackageReference Include="Spectre.Console" Version="0.45.0" />
+        <PackageReference Include="Spectre.Console.Cli" Version="0.45.0" />
+        <PackageReference Include="Spectre.Console.ImageSharp" Version="0.45.0" />
     </ItemGroup>
 
     <ItemGroup>

@@ -39,7 +39,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 .Color(Color.Teal));
 
         var username = AskUsernameIfMissing(settings.Username);
-        var password = AskPasswordIfMissing(settings.Password);
+        var password = AskPasswordIfInvalidOrMissing(settings.Password);
         var environment = AskEnvironmentIfMissing(settings.Environment);
 
         AnsiConsole.Write(
@@ -108,9 +108,8 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                             case MigrationResult.Success:
                                 ++successes;
                                 break;
-                            case MigrationResult.Fail fail:
+                            case MigrationResult.Fail:
                                 ++failures;
-                                // TODO: use error information for something
                                 break;
                         }
 
@@ -147,7 +146,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                                 ? ValidationResult.Success()
                                 : ValidationResult.Error("[yellow]Invalid username[/]")));
 
-        static string AskPasswordIfMissing(string? current)
+        static string AskPasswordIfInvalidOrMissing(string? current)
             => TryGetValidPassword(current, out var validPassword)
                 ? validPassword
                 : AnsiConsole.Prompt(
@@ -295,7 +294,7 @@ public class SampleMigrator : IAsyncDisposable
 
         for (var i = 0; i < NumberOfThingsToMigrate; ++i)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(1));
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
 
             MigrationResult result = (i + random.Next(0, 99)) % 5 != 0
                 ? new MigrationResult.Success(i)
