@@ -75,6 +75,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 
             var migrationInformation = await AnsiConsole
                 .Status()
+                .Spinner(Spinner.Known.Clock)
                 .StartAsync(
                     "Gathering migration information...",
                     _ => migrator.GatherMigrationInformationAsync());
