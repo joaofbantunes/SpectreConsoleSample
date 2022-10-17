@@ -5,6 +5,8 @@
         <TargetFramework>net7.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <!--just to not have noise during the presentation-->
+        <NoWarn>CS1998;CS0162</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
