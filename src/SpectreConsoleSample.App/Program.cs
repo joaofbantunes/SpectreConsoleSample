@@ -132,7 +132,7 @@ public class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 .Status()
                 .StartAsync(
                     "Disconnecting...",
-                    async _ => await migrator.DisposeAsync());
+                    _ => migrator.DisposeAsync().AsTask());
         }
 
         return 0;
@@ -212,7 +212,6 @@ public class RollbackCommand : AsyncCommand
                 var lyrics = new Lyrics();
 
                 using var gif = await Image.LoadAsync("rollback.gif", new GifDecoder());
-                var metadata = gif.Frames.RootFrame.Metadata.GetGifMetadata();
 
                 while (!cts.IsCancellationRequested)
                 {
@@ -229,7 +228,7 @@ public class RollbackCommand : AsyncCommand
                             table.UpdateCell(2, 0, lyrics.GetVerse().Centered());
                             ctx.Refresh();
 
-                            var delay = TimeSpan.FromMilliseconds(Math.Max(75, metadata.FrameDelay));
+                            var delay = TimeSpan.FromMilliseconds(75);
                             lyrics.Seek(delay);
                             await Task.Delay(delay, cts.Token);
                         }
@@ -269,8 +268,7 @@ public abstract record MigrationResult
 
     public sealed record Fail : MigrationResult
     {
-        public Fail(int thingId, string reason) : base(thingId)
-            => Reason = reason;
+        public Fail(int thingId, string reason) : base(thingId) => Reason = reason;
 
         public string Reason { get; }
     }
