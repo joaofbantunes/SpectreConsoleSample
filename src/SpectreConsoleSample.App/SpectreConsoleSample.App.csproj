@@ -2,13 +2,17 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net5.0</TargetFramework>
+        <TargetFramework>net7.0</TargetFramework>
         <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <!--just to not have noise during the presentation-->
+        <NoWarn>CS1998;CS0162</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Spectre.Console" Version="0.41.0"/>
-        <PackageReference Include="Spectre.Console.ImageSharp" Version="0.41.0"/>
+        <PackageReference Include="Spectre.Console" Version="0.45.0" />
+        <PackageReference Include="Spectre.Console.Cli" Version="0.45.0" />
+        <PackageReference Include="Spectre.Console.ImageSharp" Version="0.45.0" />
     </ItemGroup>
 
     <ItemGroup>
